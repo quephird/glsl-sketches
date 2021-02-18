@@ -114,6 +114,27 @@ vec3 get_camera_direction(vec2 uv, vec3 p, vec3 l, float zoom) {
     return d;
 }
 
+vec3 get_color(vec3 camera_position, vec3 camera_direction, float nearest_distance) {
+    // Set default background color of black.
+    vec3 color = vec3(0.0);
+
+    vec3 light_source = vec3(1.0, 2.0, 3.0);
+
+    if(nearest_distance < MAX_SCENE_DISTANCE) {
+        vec3 surface_point = camera_position + camera_direction * nearest_distance;
+        vec3 surface_normal = get_normal_vector(surface_point);
+
+        // Use the surface normal as the color instead
+        color += surface_normal*0.5 + 0.5;
+
+        // Add a secondary color to darken creases from the second layer
+        float secondary_color = get_gyroid_distance(surface_point, 3.43, 0.03, 0.3);
+        color *= smoothstep(-0.06, 0.05, secondary_color);
+    }
+
+    // This is apparently for "gamma correction".
+    return pow(color, vec3(.4545));;
+}
 
 void main() {
     // Center image and set aspect ratio to something pleasing.
@@ -122,10 +143,6 @@ void main() {
     // Get mouse position in uv coordinates.
 	vec2 mouse_position = u_mouse.xy/u_resolution.xy;
     
-    // Set default background color of black.
-    vec3 color = vec3(0.0);
-    vec3 col = vec3(0);
-
     vec3 initial_camera_position = vec3(0, 1, -5);
 
     // Set up two rotation matrices, one to rotate about the y-axis
@@ -146,23 +163,12 @@ void main() {
     // Now move the camera.
     vec3 camera_position = rotation_about_y_axis*rotation_about_x_axis*initial_camera_position;
 
-    // TODO: Explain how this code works
     vec3 camera_direction = get_camera_direction(uv, camera_position, vec3(0), 2.);
 
     float nearest_distance = march(camera_position, camera_direction);
 
-    // TODO: Move this elsewhere
-    if(nearest_distance < MAX_SCENE_DISTANCE) {
-    	vec3 p = camera_position + camera_direction * nearest_distance;
-    	vec3 n = get_normal_vector(p);
-        
-    	float dif = dot(n, normalize(vec3(1,2,3)))*.5+.5;
-    	col += dif;  
-    }
-    
-    // This is apparently for "gamma correction".
-    col = pow(col, vec3(.4545));
+    vec3 color = get_color(camera_position, camera_direction, nearest_distance);
     
     // Finally, set the color of the pixel.
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(color, 1.0);
 }
