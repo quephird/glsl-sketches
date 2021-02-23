@@ -124,12 +124,25 @@ vec3 get_color(vec3 camera_position, vec3 camera_direction, float nearest_distan
         vec3 surface_point = camera_position + camera_direction * nearest_distance;
         vec3 surface_normal = get_normal_vector(surface_point);
 
-        // Use the surface normal as the color instead
-        color += surface_normal*0.5 + 0.5;
+        // Use the surface normal for the color instead
+        float color_from_above = surface_normal.y*0.5 + 0.5;
+        color += color_from_above*color_from_above;
 
-        // Add a secondary color to darken creases from the second layer
+        // Add a secondary color to darken creases from the second gyroid layer
         float secondary_color = get_gyroid_distance(surface_point, 3.43, 0.03, 0.3);
         color *= smoothstep(-0.06, 0.05, secondary_color);
+
+        // Glowing, orangey cracks
+        float crack_width_coefficient = -0.02*smoothstep(0.0, -0.5, surface_normal.y)*0.04;
+        float crack_glow = smoothstep(crack_width_coefficient, -0.03, secondary_color);
+
+        // Leverage yet more gyroids to animate color of cracks
+        float flicker1 = get_gyroid_distance(surface_point+u_time*0.2, 1.67, 0.03, 0.0);
+        float flicker2 = get_gyroid_distance(surface_point-u_time*0.1, 1.42, 0.03, 0.0);
+
+        crack_glow *= flicker1*flicker2*20.0 + 0.2*smoothstep(0.2, 0.0, surface_normal.y);
+
+        color += crack_glow*vec3(1.0, 0.4, 0.1)*3.0;
     }
 
     // This is apparently for "gamma correction".
