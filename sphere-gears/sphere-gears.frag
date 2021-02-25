@@ -103,6 +103,11 @@ struct gear_t {
     bool clockwise;
 };
 
+struct gear_axle_t {
+    vec3 position;
+    float width;
+};
+
 // Signed distance functions.
 float sd_sphere(vec3 point, sphere_t sphere) {
     return length(point - sphere.position) - sphere.radius;
@@ -197,20 +202,25 @@ float sd_gear(vec3 point, gear_t gear) {
     return smooth_max(gear_distance, abs(transformed_point.y) - gear.thickness, 0.05);
 }
 
+float sd_gear_axle(vec3 point, gear_axle_t axle) {
+    gear_t gear = gear_t
+        (axle.position + vec3(0.0, 0.5*axle.width, 0.0),
+        1.5, 0.2, 12.0, 0.0, true);
+    gear_t gear2 = gear_t
+        (axle.position - vec3(0.0, 0.5*axle.width, 0.0),
+        1.5, 0.2, 12.0, 0.0, true);
+    stick_t stick = stick_t(axle.position, 1.06*axle.width, 0.05);
+
+    return min(sd_stick(point, stick), min(sd_gear(point, gear), sd_gear(point, gear2)));
+}
+
 // Note that this function contains all the knowledge of 
 // all objects in the scene.
 float get_nearest_distance(vec3 point) {
-    gear_t gear = gear_t(vec3(0.0, 2.0, 0.0), 1.5, 0.2, 12.0, PI/12.0, true);
-    float gear_distance = sd_gear(point, gear);
+    gear_axle_t axle = gear_axle_t(vec3(0.0), 6.0);
 
-    gear_t gear2 = gear_t(vec3(0.0, -2.0, 0.0), 1.5, 0.2, 12.0, 0.0, false);
-    float gear2_distance = sd_gear(point, gear2);
-
-    stick_t stick = stick_t(vec3(0.0, 0.0, 0.0), 4.25, 0.05);
-    float stick_distance = sd_stick(point, stick);
-
-    // return min(gear_distance, gear2_distance);
-    return min(stick_distance, min(gear_distance, gear2_distance));
+    return min(sd_gear_axle(point, axle),
+        min(sd_gear_axle(point.zxy, axle), sd_gear_axle(point.yzx, axle)));
 }
 
 // This takes a ray, whose origin and direction are passed in,
