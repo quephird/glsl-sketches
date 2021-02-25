@@ -46,6 +46,16 @@ vec3 translate(vec3 vector, vec3 translation) {
     return (transation_matrix*vec4(vector, 0.0)).xyz;
 }
 
+vec3 rotate_x(vec3 vector, float angle) {
+    mat4 rotation_matrix = mat4(
+        1,  0.0,          0.0,        0.0,
+        0.0, cos(angle),  sin(angle), 0.0,
+        0.0, -sin(angle), cos(angle), 0.0,
+        0.0, 0.0,         0.0,        1.0
+    );
+    return (rotation_matrix*vec4(vector, 0.0)).xyz;
+}
+
 vec3 rotate_y(vec3 vector, float angle) {
     mat4 rotation_matrix = mat4(
         cos(angle),  0.0, sin(angle), 0.0,
@@ -56,15 +66,16 @@ vec3 rotate_y(vec3 vector, float angle) {
     return (rotation_matrix*vec4(vector, 0.0)).xyz;
 }
 
-vec3 rotate_x(vec3 vector, float angle) {
+vec3 rotate_z(vec3 vector, float angle) {
     mat4 rotation_matrix = mat4(
-        1,  0.0,          0.0,        0.0,
-        0.0, cos(angle),  sin(angle), 0.0,
-        0.0, -sin(angle), cos(angle), 0.0,
-        0.0, 0.0,         0.0,        1.0
+        cos(angle),  sin(angle), 0.0, 0.0,
+        -sin(angle), cos(angle), 0.0, 0.0,
+        0.0,         0.0,        1.0, 0.0,
+        0.0,         0.0,        0.0, 1.0
     );
     return (rotation_matrix*vec4(vector, 0.0)).xyz;
 }
+
 
 // Shapes.
 struct sphere_t {
@@ -217,10 +228,21 @@ float sd_gear_axle(vec3 point, gear_axle_t axle) {
 // Note that this function contains all the knowledge of 
 // all objects in the scene.
 float get_nearest_distance(vec3 point) {
-    gear_axle_t axle = gear_axle_t(vec3(0.0), 6.0);
+    gear_axle_t axle = gear_axle_t(vec3(0.0), 8.0);
 
-    return min(sd_gear_axle(point, axle),
-        min(sd_gear_axle(point.zxy, axle), sd_gear_axle(point.yzx, axle)));
+    sphere_t sphere = sphere_t(vec3(0.0), 0.7);
+
+    // Note that we effectively make copies of the primary
+    // gear axle by swizzling and rotating the point.
+    float nearest_distance = sd_sphere(point, sphere);
+    nearest_distance = min(nearest_distance, sd_gear_axle(point.zyx, axle));
+    nearest_distance = min(nearest_distance, sd_gear_axle(point.yxz, axle));
+    nearest_distance = min(nearest_distance, sd_gear_axle(point.yzx, axle));
+    nearest_distance = min(nearest_distance, sd_gear_axle(rotate_y(rotate_x(point, PI/4.0), PI/12.0), axle));
+    nearest_distance = min(nearest_distance, sd_gear_axle(rotate_y(rotate_z(point, PI/4.0), PI/12.0), axle));
+    nearest_distance = min(nearest_distance, sd_gear_axle(rotate_y(rotate_x(rotate_z(point, PI/2.0), PI/4.0), PI/12.0), axle));
+
+    return nearest_distance;
 }
 
 // This takes a ray, whose origin and direction are passed in,
@@ -306,7 +328,7 @@ void main() {
     // Get mouse position in uv coordinates.
 	vec2 mouse_position = u_mouse.xy/u_resolution.xy;
     
-    vec3 initial_camera_position = vec3(0, 1, -10);
+    vec3 initial_camera_position = vec3(0, 1, -15);
 
     // Set up two rotation matrices, one to rotate about the y-axis
     // in response to moving the mouse along the x-axis...
