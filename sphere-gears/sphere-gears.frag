@@ -28,7 +28,7 @@ float smooth_max(float a, float b, float k) {
     return max(a, b) + pow(max(k - abs(a - b), 0.0), 2.0)/(4.0*k);
 }
 
-vec2 rotate(vec2 vector, float angle) {
+vec2 rotate_2d(vec2 vector, float angle) {
     mat2 rotation_matrix = mat2(
         cos(angle), -sin(angle),
         sin(angle), cos(angle)
@@ -56,6 +56,16 @@ vec3 rotate_y(vec3 vector, float angle) {
     return (rotation_matrix*vec4(vector, 0.0)).xyz;
 }
 
+vec3 rotate_x(vec3 vector, float angle) {
+    mat4 rotation_matrix = mat4(
+        1,  0.0,          0.0,        0.0,
+        0.0, cos(angle),  sin(angle), 0.0,
+        0.0, -sin(angle), cos(angle), 0.0,
+        0.0, 0.0,         0.0,        1.0
+    );
+    return (rotation_matrix*vec4(vector, 0.0)).xyz;
+}
+
 // Shapes.
 struct sphere_t {
     vec3 position;
@@ -65,6 +75,12 @@ struct sphere_t {
 struct box_t {
     vec3 position;
     vec3 dimensions;
+};
+
+struct stick_t {
+    vec3 position;
+    float height;
+    float thickness;
 };
 
 struct rounded_box_t {
@@ -97,6 +113,11 @@ float sd_box(vec3 point, box_t box) {
     return length(max(abs(point - box.position) - half_sizes, vec3(0.0)));
 }
 
+float sd_stick(vec3 point, stick_t stick) {
+    box_t box = box_t(stick.position, vec3(0.0, stick.height, 0.0));
+    return sd_box(point, box) - stick.thickness;
+}
+
 float sd_cross(vec3 point, cross_t crozz) {
     box_t box = box_t(crozz.position, crozz.dimensions);
     box_t box2 = box_t(crozz.position, crozz.dimensions.zyx);
@@ -110,8 +131,8 @@ float sd_rounded_box(vec3 point, rounded_box_t rounded_box) {
 
 // This function composes a gear from a single hollowed cylinder
 // and `teeth` number of rounded boxes, lying parallel to the xz plane,
-// as well as a "cross" centered in the gear. By default, it is centered
-// at the origin is only rotates in the xz-plane.
+// as well as a "cross" centered in the gear. Note that it currently
+// only rotates in the xz-plane.
 //
 //                 _──_   |‾‾‾|   _──_
 //                \    \__|   |__/    /
@@ -132,8 +153,11 @@ float sd_gear(vec3 point, gear_t gear) {
     // First move the point to compensate for the object's position
     vec3 transformed_point = point - gear.position;
 
+    // This is to rotate them at a static angle first
+    // transformed_point = rotate_x(transformed_point, -PI/4.0);
     // Then rotate the point around the y-axis
     transformed_point = rotate_y(transformed_point, (u_time+ gear.angular_offset) * (gear.clockwise ? 1.0 : -1.0));
+
 
     // Add a cross for some interesting detail.
     cross_t crozz = cross_t(
@@ -150,8 +174,7 @@ float sd_gear(vec3 point, gear_t gear) {
 
     // ... then map it to the sector for the "primary" tooth...
     float rotation_angle = tooth_number*angle_per_tooth;
-    mat2 rotation_matrix = mat2(cos(rotation_angle), -sin(rotation_angle), sin(rotation_angle), cos(rotation_angle));
-    transformed_point.xz = rotation_matrix * transformed_point.xz;
+    transformed_point.xz = rotate_2d(transformed_point.xz, rotation_angle);
 
     // ... by considering how close it is to it if it were rotated 
     // there. Doing this effectively clones the one tooth `teeth` times...
@@ -177,13 +200,17 @@ float sd_gear(vec3 point, gear_t gear) {
 // Note that this function contains all the knowledge of 
 // all objects in the scene.
 float get_nearest_distance(vec3 point) {
-    gear_t gear = gear_t(vec3(1.7, 0.0, 0.0), 1.5, 0.2, 12.0, PI/12.0, true);
+    gear_t gear = gear_t(vec3(0.0, 2.0, 0.0), 1.5, 0.2, 12.0, PI/12.0, true);
     float gear_distance = sd_gear(point, gear);
 
-    gear_t gear2 = gear_t(vec3(-1.7, 0.0, 0.0), 1.5, 0.2, 12.0, 0.0, false);
+    gear_t gear2 = gear_t(vec3(0.0, -2.0, 0.0), 1.5, 0.2, 12.0, 0.0, false);
     float gear2_distance = sd_gear(point, gear2);
 
-    return min(gear_distance, gear2_distance);
+    stick_t stick = stick_t(vec3(0.0, 0.0, 0.0), 4.25, 0.05);
+    float stick_distance = sd_stick(point, stick);
+
+    // return min(gear_distance, gear2_distance);
+    return min(stick_distance, min(gear_distance, gear2_distance));
 }
 
 // This takes a ray, whose origin and direction are passed in,
